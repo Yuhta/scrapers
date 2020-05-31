@@ -5,34 +5,24 @@ import asyncio
 import click
 import csv
 import json
+import logging
 import lxml.html
 import re
 
 
-async def vinoperfect(http, directory):
-    async with http.get('https://ca-en.caudalie.com/collections/vinoperfect/vinoperfect-natural-brightening-stars-1.html') as resp:
+async def family_sponsorship(http):
+    async with http.get('https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/family-sponsorship/sponsor-parents-grandparents/tell-us-you-want-sponsor-parent-grandparent.html') as resp:
         tree = lxml.html.fromstring(await resp.read())
-    span, = tree.cssselect('#product-price-1263')
-    price = float(span.text_content().strip().replace('$', ''))
-    with (directory / 'vinoperfect.csv').open('a') as f:
-        csv.writer(f).writerow((date.today(), price))
-
-
-async def step1(http, directory):
-    async with http.get('https://www.makeupforever.com/ca/en-ca/make-up/face/primer/step1') as resp:
-        text = await resp.text()
-    data = json.loads(re.search(r'jQuery\.extend\(Drupal.settings, (.*)\);', text).group(1))
-    price_html = data['mufe_theme']['product_list']['product_71508']['sku_list']['3']['items']['30-127']['price']
-    price = float(lxml.html.fromstring(price_html).text_content().replace('CAD', '').strip())
-    with (directory / 'step1.csv').open('a') as f:
-        csv.writer(f).writerow((date.today(), price))
+    date_modified, = tree.cssselect('time[property="dateModified"]')
+    date_modified = date_modified.text_content().strip()
+    if date_modified != '2020-03-27':
+        logging.info('Date modified: %s', date_modified)
 
 
 async def run(directory):
     async with aiohttp.ClientSession(raise_for_status=True) as http:
         tasks = [
-            vinoperfect(http, directory),
-            step1(http, directory),
+            family_sponsorship(http),
         ]
         await asyncio.gather(*tasks)
 
@@ -40,6 +30,7 @@ async def run(directory):
 @click.command()
 @click.argument('data_directory', type=click.Path(exists=True, file_okay=False, writable=True))
 def main(data_directory):
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s")
     data_directory = Path(data_directory)
     asyncio.get_event_loop().run_until_complete(run(data_directory))
 
